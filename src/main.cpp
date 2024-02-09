@@ -1,0 +1,51 @@
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <optional>
+#include <vector>
+
+#include "tokenizer.hpp"
+#include "parser.hpp"
+#include "generation.hpp"
+
+
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        std::cerr << "Error: Incorrect usage.  correct usage:" << std::endl;
+        std::cerr << "metal [filename]" << std::endl;
+        return 1;
+    }
+
+    std::string contents;
+    {
+        std::stringstream contents_stream;
+        std::fstream input(argv[1], std::ios::in);
+        contents_stream << input.rdbuf();
+        contents = contents_stream.str();
+    }
+
+    Tokenizer tokenizer(std::move(contents));
+    std::vector<Token> tokens = tokenizer.tokenize();
+
+    Parser parser(std::move(tokens));
+    std::optional<NodeExit> tree = parser.parse();
+
+    if (!tree.has_value()) {
+        std::cerr << "no statement found" << std::endl;
+        exit(1);
+    }
+
+    Generator generator(tree.value());
+    {
+        std::fstream file("out.asm", std::ios::out);
+        file << generator.generate();
+    }
+
+    system("nasm -felf64 out.asm");
+    system("ld -o out out.o");
+
+
+    return 0;
+}
+
